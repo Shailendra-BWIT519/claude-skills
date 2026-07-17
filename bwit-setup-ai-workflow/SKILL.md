@@ -66,6 +66,14 @@ Every task outcome (`committed` / `blocked` / `awaiting_approval` /
 so the trail can't be silently skipped. Full mechanics, including exact
 file formats, are in `templates/SETUP-PLAN.md` §5.5.
 
+Besides `BLOCKED.md` / `AWAITING_APPROVAL.md` / `L3_SKIPPED.md`, there is a
+fifth control file: `L2_FIX_BLOCKED.md` — written when L2 review found a
+real issue, an automatic fix attempt ran, but didn't complete cleanly (most
+often because the fix needed to edit a permission-gated file, like
+`.claude/settings.json`, that a headless session can't get approval for).
+It's a stop condition needing a human, same as `BLOCKED.md`, just with a
+different cause (a failed *fix*, not a failed *task*).
+
 ## Steps
 
 1. **Check existing state first.** Look for `.claude/settings.json`,
@@ -103,9 +111,23 @@ file formats, are in `templates/SETUP-PLAN.md` §5.5.
 3. **Merge model + hooks config into `.claude/settings.json`.**
    `templates/settings-snippet.json` has the exact `model` and `hooks` keys
    to add. If `.claude/settings.json` already exists, MERGE these two keys
-   in — preserve every existing key (especially `permissions`), never
-   overwrite the file wholesale. If it doesn't exist, create it from the
-   snippet as-is.
+   in — preserve every existing key, never overwrite the file wholesale.
+   If it doesn't exist, create it from the snippet as-is.
+
+   **If the existing file's `permissions.allow`/`additionalDirectories` is
+   large (dozens+ of entries) or has machine-specific absolute paths in
+   it:** this is personal, session-accumulated state, not team-shared
+   config, and it does not belong in a tracked file — every new permission
+   grant during a long session gets appended here, and a live session
+   re-persists its own in-memory copy on every new grant, so hand-edits to
+   trim it will not reliably stick while that session stays open anyway.
+   Move `permissions`/`additionalDirectories` to `.claude/settings.local.json`
+   instead (Claude Code's own convention for personal, always-gitignored
+   settings — never commit this file, see step 7) and keep the tracked
+   `.claude/settings.json` to just `model` + `hooks` (+ a small, deliberately
+   curated set of genuinely team-safe permission patterns, if any). Tell the
+   developer you're doing this and why, rather than silently leaving the
+   bloat in a tracked file.
 
    **Ask the developer which branch they merge into — never guess.**
    `run-plan.sh`'s `BASE_BRANCH` (used for the base-branch safety check and
@@ -197,6 +219,13 @@ file formats, are in `templates/SETUP-PLAN.md` §5.5.
    claude-workflow/*
    !claude-workflow/AUDIT_LOG.jsonl
    ```
+
+   **Regardless of that answer**, `.claude/settings.local.json` must always
+   be gitignored — it's Claude Code's own convention for personal,
+   machine-specific settings (see step 3's `permissions`/`additionalDirectories`
+   split) and should never be tracked even on a team-shared-`.claude/`
+   project. Add `.claude/settings.local.json` explicitly if it isn't already
+   covered.
 
 8. **Report back**: which domains were detected and which gates were
    scaffolded (and which were skipped, and why), what already existed and

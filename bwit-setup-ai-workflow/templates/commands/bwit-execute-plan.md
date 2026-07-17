@@ -8,6 +8,12 @@ Run `bash claude-workflow/run-plan.sh` and report back what happened.
   options: `/bwit-approve-plan` or `/bwit-reject-plan`.
 - If it wrote `claude-workflow/BLOCKED.md`: show its contents in full —
   this needs the user's judgment, not another automatic retry.
+- If it wrote `claude-workflow/L2_FIX_BLOCKED.md`: show its contents in
+  full, and also show `claude-workflow/REVIEW.md` (the original findings
+  it references) — this means L2 found a real issue and an automatic fix
+  attempt couldn't complete cleanly (most often a permission-gated file it
+  couldn't get approval to edit headlessly). Needs the user's judgment, not
+  another automatic retry.
 - If it wrote `claude-workflow/L3_SKIPPED.md`: mention it exists and
   summarize why in one line — this is not a failure.
 - If every task is already `[x]` and there's nothing to run: say so plainly

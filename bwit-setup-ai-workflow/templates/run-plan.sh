@@ -99,6 +99,7 @@ MODEL_PLAN_FILE="$WORKFLOW_DIR/MODEL_PLAN.md"
 AWAITING_FILE="$WORKFLOW_DIR/AWAITING_APPROVAL.md"
 AUDIT_LOG="$WORKFLOW_DIR/AUDIT_LOG.jsonl"
 L3_SKIPPED_FILE="$WORKFLOW_DIR/L3_SKIPPED.md"
+L2_FIX_BLOCKED_FILE="$WORKFLOW_DIR/L2_FIX_BLOCKED.md"
 
 log() { echo "[run-plan] $*"; }
 
@@ -281,8 +282,13 @@ against this checklist and note the results in your commit message:
 $checklist_content
 ---
 
-If the self-check is satisfied: create one git commit with a clear
-conventional-commit message (include a brief checklist summary in the body).
+If the self-check is satisfied: stage ONLY the files you actually created or
+modified for this task (\`git add <specific paths>\`) — never \`git add -A\`
+or \`git commit -a\`. If the working tree has other unrelated pending changes
+(pre-existing, someone else's, or left over from earlier work), leave them
+alone; do not let them ride along in this commit even if they look related
+or harmless. Then create one git commit with a clear conventional-commit
+message (include a brief checklist summary in the body).
 Do NOT edit the checkbox for this task in $PLAN_FILE — leave the line
 exactly as '- [ ] $task_text_raw'; this script updates its status itself
 after this session ends. If the task is genuinely incomplete after 3
@@ -306,7 +312,12 @@ gate for this task's gate type ('$gate'), config toggles alongside it in
 $GATES_DIR — do not run individual npx/npm commands separately, that burns
 far more tokens for the same signal. If it exits 0 (ALL CHECKS PASSED /
 ALL METRICS PASSED): change '- [ ] $task_text_raw' to '- [x] $task_text_raw'
-in $PLAN_FILE and create one git commit with a clear conventional-commit
+in $PLAN_FILE. Stage ONLY the files you actually created or modified for
+this task (\`git add <specific paths>\`) — never \`git add -A\` or
+\`git commit -a\`. If the working tree has other unrelated pending changes
+(pre-existing, someone else's, or left over from earlier work), leave them
+alone; do not let them ride along in this commit even if they look related
+or harmless. Then create one git commit with a clear conventional-commit
 message. If it still fails after 3 attempts: write the problem, what you
 tried, and the check's error output to $BLOCKED_FILE — do NOT commit broken
 code. If the task is ambiguous or impossible: write why to $BLOCKED_FILE. Do
@@ -332,6 +343,15 @@ run_l2_review() {
 edge cases, scope creep, and — for non-code changes — inconsistency with the
 requirement it's meant to satisfy. If you find issues, write them to
 $REVIEW_FILE with file:line references. If it's clean, respond with just: CLEAN
+
+If any finding is about .claude/settings.json (or any config/hooks file):
+quote the EXACT JSON key path (e.g. \"hooks.PreCompact[0].hooks[0].command\"
+vs \"permissions.allow[42]\") the claim is about, and do not describe entries
+in a permissions/allow list as something that 'runs automatically' or 'on
+every X' — an allow-list entry only pre-approves a command pattern for later
+manual/agent use, it does not execute anything by itself. Only hooks.* entries
+run automatically. Getting this distinction wrong produces false alarms a
+human can't quickly verify — precision here matters more than terseness.
 
 Diff:
 $diff"
@@ -507,7 +527,32 @@ sees it."
     # was wrong.
     AFTER_FIX_HEAD=$(git rev-parse HEAD)
     if [ -f "$REVIEW_FILE" ] || [ "$BEFORE_FIX_HEAD" = "$AFTER_FIX_HEAD" ]; then
-      log "STOP: L2 fix did not complete ($REVIEW_FILE still present and/or no new commit). Human needed."
+      # A named, documented control file — not just leaving REVIEW.md behind
+      # with a log line — so this is a first-class, greppable stop condition
+      # like BLOCKED.md/AWAITING_APPROVAL.md/L3_SKIPPED.md, not a state a
+      # human has to reverse-engineer from log output.
+      cat > "$L2_FIX_BLOCKED_FILE" <<EOF
+# L2_FIX_BLOCKED.md (written by run-plan.sh — not a failure, human needed)
+
+## Task
+$TASK_TEXT
+
+## What happened
+L2 review found issues (see $REVIEW_FILE, left in place) and an automatic
+fix attempt was made, but did not complete cleanly: either $REVIEW_FILE is
+still present (the fix session didn't consider it resolved), or no new
+commit was created since the fix attempt started. This most often happens
+when the fix requires editing a permission-gated file (e.g.
+.claude/settings.json) that the headless session couldn't get approval to
+edit.
+
+## What to do
+1. Read $REVIEW_FILE for the original findings.
+2. Apply the fix yourself (or grant the needed permission and re-run).
+3. Delete both $REVIEW_FILE and this file once resolved.
+4. Re-run run-plan.sh to continue.
+EOF
+      log "STOP: L2 fix did not complete ($REVIEW_FILE still present and/or no new commit). Human needed — see $L2_FIX_BLOCKED_FILE."
       audit_log "$TASK_TEXT_RAW" "$GATE" "$TASK_CODE_MODEL" "$TASK_REVIEW_MODEL" "blocked" "$AFTER_FIX_HEAD" "L2 fix did not complete"
       exit 1
     fi
