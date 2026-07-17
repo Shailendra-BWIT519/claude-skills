@@ -93,7 +93,10 @@ separately, that burns far more tokens for the same signal. If it exits 0
 commit with a clear conventional-commit message. If it still fails after 3
 attempts: write the problem, what you tried, and check.sh's error output to
 $BLOCKED_FILE — do NOT commit broken code. If the task is ambiguous or
-impossible: write why to $BLOCKED_FILE. Do not guess." \
+impossible: write why to $BLOCKED_FILE. Do not guess. If \`git commit\`
+itself requires an approval you cannot obtain in this headless session,
+that is a failure — write it to $BLOCKED_FILE exactly like a failing test,
+do not mark the task done or claim success without an actual commit." \
     --model "$model" \
     --permission-mode acceptEdits
 }
@@ -143,6 +146,7 @@ while grep -qE '^- \[ \]' "$PLAN_FILE"; do
 
   log "Task: $TASK_TEXT"
   log "  code: $TASK_CODE_MODEL | review: $TASK_REVIEW_MODEL"
+  BEFORE_HEAD=$(git rev-parse HEAD)
   run_task "$TASK_TEXT" "$TASK_CODE_MODEL"
 
   if [ -f "$BLOCKED_FILE" ]; then
@@ -156,16 +160,65 @@ while grep -qE '^- \[ \]' "$PLAN_FILE"; do
     exit 1
   fi
 
+  # Safety net: PLAN.md isn't git-tracked, so ticking the checkbox alone
+  # doesn't prove a commit happened. If HEAD didn't move, the session likely
+  # hit a permission wall on `git commit` itself and silently gave up —
+  # without this check the loop would proceed to L2 review, which would
+  # end up reviewing the PREVIOUS task's already-committed diff instead of
+  # this task's (uncommitted, possibly invisible) changes.
+  AFTER_HEAD=$(git rev-parse HEAD)
+  if [ "$BEFORE_HEAD" = "$AFTER_HEAD" ]; then
+    log "STOP: $PLAN_FILE task was ticked but no new commit was created."
+    cat > "$BLOCKED_FILE" <<EOF
+# BLOCKED.md (auto-generated safety check by run-plan.sh)
+
+## Task
+$TASK_TEXT
+
+## Problem
+The task session marked this task \`[x]\` in $PLAN_FILE (or otherwise
+reported success) but \`git HEAD\` did not move — no commit was actually
+created. This usually means \`git commit\` itself required an approval that
+could not be obtained in this headless session, and the session gave up
+without reporting it as a failure.
+
+## What to do
+1. Run \`git status\` — the intended changes are likely sitting uncommitted
+   in the working tree.
+2. If they look correct: commit them yourself, then re-run.
+3. If they look wrong: revert and investigate.
+
+Delete this file once resolved, then re-run.
+EOF
+    exit 1
+  fi
+
   log "L2 review ($TASK_REVIEW_MODEL)..."
   run_l2_review "$TASK_REVIEW_MODEL"
 
   if [ -f "$REVIEW_FILE" ]; then
     log "L2 found issues — fixing before continuing..."
+    BEFORE_FIX_HEAD=$(git rev-parse HEAD)
     claude -p "Read $REVIEW_FILE and fix the issues it raises. Add a
-follow-up git commit, then delete $REVIEW_FILE." \
+follow-up git commit, then delete $REVIEW_FILE. If a fix requires editing a
+permission-gated file (e.g. .claude/settings.json) and you cannot get that
+approval in this headless session, do NOT delete $REVIEW_FILE — leave it in
+place with a note explaining exactly what's blocked and why, so a human
+sees it." \
       --model "$TASK_CODE_MODEL" \
       --permission-mode acceptEdits
-    rm -f "$REVIEW_FILE"
+
+    # Only trust that the fix actually happened if BOTH: the session itself
+    # deleted REVIEW.md (its own signal that it's done), AND a new commit
+    # exists. Blindly rm -f'ing REVIEW.md here — regardless of whether the
+    # fix succeeded — was the previous bug: a fix blocked by a permission
+    # wall would silently vanish and the loop would carry on as if nothing
+    # was wrong.
+    AFTER_FIX_HEAD=$(git rev-parse HEAD)
+    if [ -f "$REVIEW_FILE" ] || [ "$BEFORE_FIX_HEAD" = "$AFTER_FIX_HEAD" ]; then
+      log "STOP: L2 fix did not complete ($REVIEW_FILE still present and/or no new commit). Human needed."
+      exit 1
+    fi
   fi
 done
 
