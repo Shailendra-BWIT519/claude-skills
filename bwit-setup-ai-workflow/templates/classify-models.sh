@@ -75,7 +75,7 @@ code_model: <model id>
 review_model: <model id>
 reason: <one sentence>" \
     --model "$CLASSIFIER_MODEL" \
-    --permission-mode acceptEdits 2>/dev/null)
+    --permission-mode acceptEdits < /dev/null 2>/dev/null)
 
   {
     echo "## Task: $TASK_TEXT"

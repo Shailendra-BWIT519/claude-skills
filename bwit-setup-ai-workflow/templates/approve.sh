@@ -45,8 +45,29 @@ if ! grep -qF -- "- [~] $TASK_LINE" "$PLAN_FILE"; then
   exit 1
 fi
 
-ESCAPED_TASK_LINE=$(printf '%s\n' "$TASK_LINE" | sed 's/[&/\]/\\&/g')
-sed -i "s/^- \[~\] ${ESCAPED_TASK_LINE}\$/- [x] ${ESCAPED_TASK_LINE}/" "$PLAN_FILE"
+# Literal-string replace (not sed regex) — task text routinely contains
+# backticks/parens/brackets that sed would misinterpret as regex
+# metacharacters, silently failing to match (this broke run-plan.sh's own
+# "[ ] -> [~]" transition the same way; fixed there too).
+node -e '
+  const fs = require("fs");
+  const [file, taskLine] = process.argv.slice(1);
+  const oldLine = "- [~] " + taskLine;
+  const newLine = "- [x] " + taskLine;
+  const content = fs.readFileSync(file, "utf8");
+  const lines = content.split("\n");
+  const idx = lines.indexOf(oldLine);
+  if (idx === -1) {
+    process.stderr.write("approve.sh: no exact match for line: " + oldLine + "\n");
+    process.exit(1);
+  }
+  lines[idx] = newLine;
+  fs.writeFileSync(file, lines.join("\n"));
+' -- "$PLAN_FILE" "$TASK_LINE"
+if [ $? -ne 0 ]; then
+  log "ERROR: could not flip $PLAN_FILE checkbox to '- [x] ...' — resolve by hand."
+  exit 1
+fi
 
 APPROVER=$(git config user.email 2>/dev/null || echo "unknown")
 node -e '

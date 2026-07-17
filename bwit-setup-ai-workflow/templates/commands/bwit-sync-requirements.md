@@ -49,3 +49,21 @@ configured yet).
 check passes. Every other gate type still commits its work but then pauses
 the loop for mandatory human sign-off (claude-workflow/AWAITING_APPROVAL.md)
 — that's expected, not a sign something is wrong.
+
+## Model classification (after adding tasks)
+
+If this sync added at least one new unchecked task to PLAN.md, run
+`bash claude-workflow/classify-models.sh` at the end. It proposes a
+CODE_MODEL/REVIEW_MODEL choice per task into claude-workflow/MODEL_PLAN.md
+using a cheap Haiku classifier — biased toward the cheapest model that can
+do the job, escalating only for real logic (Sonnet) or security/payments/
+auth/migrations (Opus).
+
+This is a proposal only, not a decision — tell the user MODEL_PLAN.md was
+generated and needs their review before `run-plan.sh` will use it (delete
+the file instead to fall back to run-plan.sh's static defaults). Do not
+tell the user this step is complete or safe to proceed from until they've
+actually looked at it — flag any task tagged security/payment/auth/migration
+explicitly so they know to double-check the classifier didn't under-call it.
+
+Skip this step entirely if no new tasks were added this sync.

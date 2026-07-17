@@ -1,13 +1,13 @@
 ---
-name: ai-workflow-setup-node
-description: Scaffold the solo-dev AI pipeline for a generic Node.js backend project (Express, Fastify, plain Node, etc — not NestJS, not a React/Next.js frontend) — pre-filled gates/code-check.sh (typecheck/lint/test/format) and .claudeignore. Thin wrapper around the setup-ai-workflow skill's shared engine (run-plan.sh, classify-models.sh, hooks, commands, gates) — same pipeline, Node-specific defaults so onboarding skips code-language detection. Use when the user wants this workflow set up in a Node.js backend project.
+name: bwit-ai-workflow-setup-node
+description: Scaffold the solo-dev AI pipeline for a generic Node.js backend project (Express, Fastify, plain Node, etc — not NestJS, not a React/Next.js frontend) — pre-filled gates/code-check.sh (typecheck/lint/test/format) and .claudeignore. Thin wrapper around the bwit-setup-ai-workflow skill's shared engine (run-plan.sh, classify-models.sh, hooks, commands, gates) — same pipeline, Node-specific defaults so onboarding skips code-language detection. Use when the user wants this workflow set up in a Node.js backend project.
 ---
 
 # AI Workflow Setup — Node.js (generic backend)
 
 Thin wrapper. The actual engine (`run-plan.sh`, `classify-models.sh`, hooks,
 slash commands, `gates/` skeletons) lives in exactly one place:
-`~/.claude/skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
+`~/.claude/skills/bwit-setup-ai-workflow/`. Read that skill's `SKILL.md` and
 follow its Steps 1-8 exactly, with these Node-specific overrides to Step 5's
 **code domain** detection only — the shared skill's design and AI/eval
 domain detection in Step 5 still applies independently and unmodified (a
@@ -40,4 +40,4 @@ or a prompt-serving endpoint):
 
 Everything else — copy list, `.claude/settings.json` merge, `PLAN.md`
 seeding, the `.gitignore` tracked-vs-ignored question, final report — follow
-`setup-ai-workflow`'s `SKILL.md` unchanged.
+`bwit-setup-ai-workflow`'s `SKILL.md` unchanged.

@@ -20,7 +20,7 @@ Implement its setup (Section 9, Din 1 items first):
 
 3. .claude/hooks/ — pre-compact-handoff.sh and session-start-context.sh
 
-4. .claude/commands/ — handoff.md and sync.md
+4. .claude/commands/ — handoff.md and sync-requirements.md
 
 5. run-plan.sh with the model config variables at top
 
@@ -48,7 +48,7 @@ project/
 
 ├── REQUIREMENTS.md        ← SIRF HUMAN likhta hai (source of truth)
 
-├── PLAN.md                ← Claude banata hai (/sync se), append-only,
+├── PLAN.md                ← Claude banata hai (/bwit-sync-requirements se), append-only,
 │                              har task [gate-type]-tagged (§5.5)
 
 ├── CLAUDE.md              ← Claude banata hai, human monthly prune (60-100 lines)
@@ -83,7 +83,7 @@ project/
 
     │   ├── handoff.md     ← manual escape hatch
 
-    │   └── sync.md        ← requirements → plan generator (also tags gates)
+    │   └── sync-requirements.md        ← requirements → plan generator (also tags gates)
 
     └── hooks/
 
@@ -167,7 +167,7 @@ discovered gotchas/decisions.
 
 ## 4. Slash commands
 
-### /sync (.claude/commands/sync.md)
+### /bwit-sync-requirements (.claude/commands/bwit-sync-requirements.md)
 
 ```
 
@@ -199,7 +199,7 @@ Read REQUIREMENTS.md. Compare with PLAN.md (if it exists).
 
 ```
 
-### /handoff (.claude/commands/handoff.md)
+### /bwit-handoff (.claude/commands/bwit-handoff.md)
 
 ```
 
@@ -383,11 +383,11 @@ whole.
 
    ("3 galat attempts → 15 min lock", not "login achha ho")
 
-2. /sync
+2. /bwit-sync-requirements
 
 3. PLAN.md + QUESTIONS.md review (30 sec) — questions ho to jawab
 
-   REQUIREMENTS.md me daal ke dobara /sync
+   REQUIREMENTS.md me daal ke dobara /bwit-sync-requirements
 
 4. ./run-plan.sh   (pehli 2-3 runs SUPERVISED, feature branch par)
 
@@ -407,9 +407,9 @@ Naya task, session fresh   → /clear kaafi
 
 Same kaam, session heavy   → kuch mat karo (auto-compact sambhalega)
 
-Naya task, session heavy   → /handoff + /clear
+Naya task, session heavy   → /bwit-handoff + /clear
 
-Exploratory/debugging      → end me /handoff (findings durable karo)
+Exploratory/debugging      → end me /bwit-handoff (findings durable karo)
 
 ```
 
@@ -421,9 +421,9 @@ Interactive session me investigate karo
 
   → chhota fix → wahi session me fix + test + commit
 
-  → bada fix → findings REQUIREMENTS.md me → /sync → loop
+  → bada fix → findings REQUIREMENTS.md me → /bwit-sync-requirements → loop
 
-  → investigation adhuri → /handoff (yahi handoff ka asli use-case hai)
+  → investigation adhuri → /bwit-handoff (yahi handoff ka asli use-case hai)
 
 ```
 

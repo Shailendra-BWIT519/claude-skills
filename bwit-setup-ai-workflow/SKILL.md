@@ -1,6 +1,6 @@
 ---
-name: setup-ai-workflow
-description: Scaffold the solo-dev AI pipeline (PLAN.md task loop, run-plan.sh execution engine, per-domain gates for code/design/eval/structural work, mandatory human sign-off on non-code tasks, an append-only audit trail, session hooks, /sync and /handoff commands) into the current project. Domain-agnostic — works for backend/frontend code in any language, pure design work, prompt-engineering/eval-driven AI work, and architecture/requirements-only work, including projects that mix several of these. Use when the user asks to set up this Claude Code automation/workflow system in a new or different project, or references "the solo-dev AI pipeline" / "run-plan.sh setup" / "Din 1 setup" / "enterprise-grade workflow".
+name: bwit-setup-ai-workflow
+description: Scaffold the solo-dev AI pipeline (PLAN.md task loop, run-plan.sh execution engine, per-domain gates for code/design/eval/structural work, mandatory human sign-off on non-code tasks, an append-only audit trail, session hooks, /bwit-sync-requirements, /bwit-handoff, /bwit-execute-plan, /bwit-approve-plan, and /bwit-reject-plan commands) into the current project. Domain-agnostic — works for backend/frontend code in any language, pure design work, prompt-engineering/eval-driven AI work, and architecture/requirements-only work, including projects that mix several of these. Use when the user asks to set up this Claude Code automation/workflow system in a new or different project, or references "the solo-dev AI pipeline" / "run-plan.sh setup" / "Din 1 setup" / "enterprise-grade workflow".
 ---
 
 # Setup AI Workflow
@@ -26,7 +26,7 @@ the checklist structure for `design-checklist.md`/`structural-checklist.md`/
 thresholds, project-specific checklist items — is project-specific and must
 be filled in during onboarding.
 
-Five thin wrapper skills (`ai-workflow-setup-node`/`-react`/`-python`/
+Five thin wrapper skills (`bwit-ai-workflow-setup-node`/`-react`/`-python`/
 `-dotnet`/`-nest`) exist for common stacks — they skip language detection
 and pre-fill `gates/code-check.sh`'s commands, then defer everything else to
 this skill's Steps 1-8 unchanged. If the user invokes one of those, follow
@@ -79,8 +79,16 @@ file formats, are in `templates/SETUP-PLAN.md` §5.5.
    contents from memory — copy the bytes):
    - `templates/hooks/session-start-context.sh` → `.claude/hooks/`
    - `templates/hooks/pre-compact-handoff.sh` → `.claude/hooks/`
-   - `templates/commands/sync.md` → `.claude/commands/`
-   - `templates/commands/handoff.md` → `.claude/commands/`
+   - `templates/commands/bwit-sync-requirements.md` → `.claude/commands/`
+   - `templates/commands/bwit-handoff.md` → `.claude/commands/`
+   - `templates/commands/bwit-execute-plan.md` → `.claude/commands/` (runs
+     run-plan.sh and reports back — committed/paused/blocked/L3-skipped)
+   - `templates/commands/bwit-approve-plan.md` → `.claude/commands/` (runs
+     approve.sh, reminding the user what they're signing off on first)
+   - `templates/commands/bwit-reject-plan.md` → `.claude/commands/` (no
+     deterministic script backs this one — it's a judgment task: show the
+     diff, ask revert vs. fix-and-recommit vs. abandon, reset the PLAN.md
+     checkbox, delete AWAITING_APPROVAL.md)
    - `templates/run-plan.sh` → `claude-workflow/run-plan.sh`
    - `templates/approve.sh` → `claude-workflow/approve.sh`
    - `templates/classify-models.sh` → `claude-workflow/classify-models.sh`
@@ -155,7 +163,7 @@ file formats, are in `templates/SETUP-PLAN.md` §5.5.
      also the universal fallback for anything unclassified.
 
 6. **Seed 2-3 boring smoke-test tasks** into `claude-workflow/PLAN.md`,
-   each correctly gate-tagged (see `templates/commands/sync.md`'s tagging
+   each correctly gate-tagged (see `templates/commands/bwit-sync-requirements.md`'s tagging
    rules) — mechanical, low-risk fixes discovered during onboarding (stale
    config, a missing `.env.example`, a cleanup item). If more than one
    domain was detected, include at least one task per detected domain so

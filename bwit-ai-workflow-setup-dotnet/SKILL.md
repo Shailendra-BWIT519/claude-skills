@@ -1,13 +1,13 @@
 ---
-name: ai-workflow-setup-dotnet
-description: Scaffold the solo-dev AI pipeline for a .NET Core / C# project specifically — pre-filled check.sh (dotnet build/format/test) and .claudeignore. Thin wrapper around the setup-ai-workflow skill's shared engine (run-plan.sh, classify-models.sh, hooks, commands) — same pipeline, .NET-specific defaults so onboarding skips language detection. Use when the user wants this workflow set up in a .NET/C# project.
+name: bwit-ai-workflow-setup-dotnet
+description: Scaffold the solo-dev AI pipeline for a .NET Core / C# project specifically — pre-filled check.sh (dotnet build/format/test) and .claudeignore. Thin wrapper around the bwit-setup-ai-workflow skill's shared engine (run-plan.sh, classify-models.sh, hooks, commands) — same pipeline, .NET-specific defaults so onboarding skips language detection. Use when the user wants this workflow set up in a .NET/C# project.
 ---
 
 # AI Workflow Setup — .NET Core
 
 Thin wrapper. The actual engine (`run-plan.sh`, `classify-models.sh`, hooks,
 slash commands, `check.sh` skeleton) lives in exactly one place:
-`~/.claude/skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
+`~/.claude/skills/bwit-setup-ai-workflow/`. Read that skill's `SKILL.md` and
 follow its Steps 1-8 exactly, with these .NET-specific overrides to Step 5 —
 **this is the least-tested language for this pipeline (never run against a
 real .NET project as of this writing), so be extra rigorous about actually
@@ -46,4 +46,4 @@ verifying every command rather than trusting these defaults:**
 
 Everything else — copy list, `.claude/settings.json` merge, `PLAN.md`
 seeding, the `.gitignore` tracked-vs-ignored question, final report — follow
-`setup-ai-workflow`'s `SKILL.md` unchanged.
+`bwit-setup-ai-workflow`'s `SKILL.md` unchanged.

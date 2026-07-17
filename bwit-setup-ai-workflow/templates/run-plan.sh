@@ -51,14 +51,28 @@ REVIEW_MODEL="${REVIEW_MODEL_OVERRIDE:-$REVIEW_MODEL}"
 TASK_TIMEOUT=1200   # task implementation + L2-fix sessions: 20 min
 REVIEW_TIMEOUT=600  # L2/L3 review sessions: 10 min
 
+# L3 reviews the WHOLE branch diff (main...HEAD) in one prompt. On a branch
+# that's diverged heavily from main (long-lived branch, stale main, or just
+# a lot of unrelated prior history) this can be megabytes — the CLI itself
+# rejects an oversized prompt ("Prompt is too long"), which previously
+# surfaced as a bare crash with no indication why. 500KB is well past what
+# a single review pass can meaningfully digest anyway, so past this size
+# L3 is skipped with a clear note instead of attempted and failed.
+L3_MAX_DIFF_BYTES=500000
+
 # Runs `claude -p` under a timeout; returns 124 on timeout (GNU coreutils
-# `timeout` convention), otherwise claude's own exit code.
+# `timeout` convention), otherwise claude's own exit code. The prompt is
+# piped via stdin rather than passed as a CLI argument — a full diff
+# embedded as an argv string blows past Windows' command-line length limit
+# ("Argument list too long") on anything but a tiny change; this happened
+# for real reviewing a 7-file deletion. `-p` with no inline text reads the
+# prompt from stdin, per `claude --help` ("useful for pipes").
 run_claude() {
-  local timeout_s="$1"
-  shift
+  local timeout_s="$1" prompt="$2"
+  shift 2
   # -k 10: if SIGTERM doesn't kill a truly stuck process (e.g. blocked in a
   # syscall), send SIGKILL 10s later so the script always regains control.
-  timeout -k 10 "$timeout_s" claude "$@"
+  timeout -k 10 "$timeout_s" claude -p "$@" <<< "$prompt"
 }
 
 # This script lives in claude-workflow/, but must operate from the repo root
@@ -74,6 +88,7 @@ REVIEW_FILE="$WORKFLOW_DIR/REVIEW.md"
 MODEL_PLAN_FILE="$WORKFLOW_DIR/MODEL_PLAN.md"
 AWAITING_FILE="$WORKFLOW_DIR/AWAITING_APPROVAL.md"
 AUDIT_LOG="$WORKFLOW_DIR/AUDIT_LOG.jsonl"
+L3_SKIPPED_FILE="$WORKFLOW_DIR/L3_SKIPPED.md"
 
 log() { echo "[run-plan] $*"; }
 
@@ -116,6 +131,33 @@ strip_gate_tag() {
 
 is_blocked_line() {
   echo "$1" | grep -qE '^- \[ \] (\[[a-z-]+\] )?\[blocked\]'
+}
+
+# Flips a PLAN.md checkbox line via exact literal-string match (Node's
+# String.replace with a string arg, not a regex). Task text routinely
+# contains backticks, parens, and square brackets (`bg-[#ff2347]`,
+# `border-[#DADADA]`) — sed's own regex metacharacters, which broke the
+# previous sed-based approach silently (the search pattern matched nothing,
+# so the checkbox never flipped, but the script didn't notice and pressed
+# on as if it had). Prints an error and returns 1 if no exact line matched,
+# so callers can fail loudly instead of silently continuing on stale state.
+set_plan_line() {
+  local file="$1" old_prefix="$2" new_prefix="$3" task_text="$4"
+  node -e '
+    const fs = require("fs");
+    const [file, oldPrefix, newPrefix, taskText] = process.argv.slice(1);
+    const oldLine = oldPrefix + taskText;
+    const newLine = newPrefix + taskText;
+    const content = fs.readFileSync(file, "utf8");
+    const lines = content.split("\n");
+    const idx = lines.indexOf(oldLine);
+    if (idx === -1) {
+      process.stderr.write("set_plan_line: no exact match for line: " + oldLine + "\n");
+      process.exit(1);
+    }
+    lines[idx] = newLine;
+    fs.writeFileSync(file, lines.join("\n"));
+  ' -- "$file" "$old_prefix" "$new_prefix" "$task_text"
 }
 
 gate_is_human_required() {
@@ -184,7 +226,7 @@ if [ -f "$AWAITING_FILE" ]; then
 fi
 
 if [ ! -f "$PLAN_FILE" ]; then
-  log "ERROR: $PLAN_FILE not found. Run /sync in an interactive session first."
+  log "ERROR: $PLAN_FILE not found. Run /bwit-sync-requirements in an interactive session first."
   exit 1
 fi
 
@@ -250,39 +292,73 @@ exactly like a failing check, do not mark the task done or claim success
 without an actual commit."
   fi
 
-  run_claude "$TASK_TIMEOUT" -p "$body" \
+  run_claude "$TASK_TIMEOUT" "$body" \
     --model "$model" \
     --permission-mode acceptEdits
 }
 
 run_l2_review() {
-  local model="$1" diff
+  local model="$1" diff prompt
   diff=$(git diff HEAD~1 2>/dev/null)
   if [ -z "$diff" ]; then
     log "L2: no diff to review (no commit made), skipping."
     return 0
   fi
-  run_claude "$REVIEW_TIMEOUT" -p "Review ONLY this diff. Check for bugs, security issues, missing
+  prompt="Review ONLY this diff. Check for bugs, security issues, missing
 edge cases, scope creep, and — for non-code changes — inconsistency with the
 requirement it's meant to satisfy. If you find issues, write them to
 $REVIEW_FILE with file:line references. If it's clean, respond with just: CLEAN
 
 Diff:
-$diff" \
+$diff"
+  run_claude "$REVIEW_TIMEOUT" "$prompt" \
     --model "$model" \
     --permission-mode acceptEdits
 }
 
 run_l3_review() {
-  local diff
+  local diff prompt diff_bytes
   diff=$(git diff main...HEAD 2>/dev/null)
-  run_claude "$REVIEW_TIMEOUT" -p "You did NOT write this code. You are a skeptical senior reviewer.
+  diff_bytes=$(printf '%s' "$diff" | wc -c)
+
+  if [ "$diff_bytes" -gt "$L3_MAX_DIFF_BYTES" ]; then
+    local file_count
+    file_count=$(git diff main...HEAD --stat 2>/dev/null | tail -1)
+    cat > "$L3_SKIPPED_FILE" <<EOF
+# L3_SKIPPED.md (written by run-plan.sh — not a failure, a graceful skip)
+
+L3's whole-branch review (\`git diff main...HEAD\`) was skipped: the diff is
+${diff_bytes} bytes, over the ${L3_MAX_DIFF_BYTES}-byte limit for a single
+review pass to meaningfully digest, and past what the CLI will accept as
+one prompt anyway.
+
+$file_count
+
+This usually means this branch has diverged heavily from main (a long-lived
+branch, a stale main, or unrelated prior history) — not that this run's
+tasks are unusually large. Each individual task's diff was already reviewed
+by L2 (see claude-workflow/AUDIT_LOG.jsonl for the per-task outcomes).
+
+## What to do
+Review \`git diff main...HEAD\` yourself in chunks (e.g. per-file, or
+\`git log main..HEAD --oneline\` to scope down to the commits that actually
+matter), or rebase/merge main into this branch first to shrink the diff
+before re-running L3 manually.
+
+Delete this file once you've reviewed (or consciously decided to skip) L4.
+EOF
+    log "L3 SKIPPED: diff is ${diff_bytes} bytes (limit ${L3_MAX_DIFF_BYTES}) — see $L3_SKIPPED_FILE"
+    return 0
+  fi
+
+  prompt="You did NOT write this code. You are a skeptical senior reviewer.
 Assume it has at least 2 problems — find them. Focus on: failure paths,
 breaking inputs, design coherence across tasks, duplicated logic, and
 integration gaps.
 
 Full diff:
-$diff" \
+$diff"
+  run_claude "$REVIEW_TIMEOUT" "$prompt" \
     --model "$FEATURE_REVIEW_MODEL" \
     --permission-mode acceptEdits
 }
@@ -388,12 +464,13 @@ EOF
   if [ -f "$REVIEW_FILE" ]; then
     log "L2 found issues — fixing before continuing..."
     BEFORE_FIX_HEAD=$(git rev-parse HEAD)
-    run_claude "$TASK_TIMEOUT" -p "Read $REVIEW_FILE and fix the issues it raises. Add a
+    FIX_PROMPT="Read $REVIEW_FILE and fix the issues it raises. Add a
 follow-up git commit, then delete $REVIEW_FILE. If a fix requires editing a
 permission-gated file (e.g. .claude/settings.json) and you cannot get that
 approval in this headless session, do NOT delete $REVIEW_FILE — leave it in
 place with a note explaining exactly what's blocked and why, so a human
-sees it." \
+sees it."
+    run_claude "$TASK_TIMEOUT" "$FIX_PROMPT" \
       --model "$TASK_CODE_MODEL" \
       --permission-mode acceptEdits
 
@@ -413,8 +490,11 @@ sees it." \
 
   if gate_is_human_required "$GATE"; then
     SHA=$(git rev-parse HEAD)
-    ESCAPED_TASK_TEXT_RAW=$(printf '%s\n' "$TASK_TEXT_RAW" | sed 's/[&/\]/\\&/g')
-    sed -i "s/^- \[ \] ${ESCAPED_TASK_TEXT_RAW}\$/- [~] ${ESCAPED_TASK_TEXT_RAW}/" "$PLAN_FILE"
+    if ! set_plan_line "$PLAN_FILE" "- [ ] " "- [~] " "$TASK_TEXT_RAW"; then
+      log "STOP: could not flip $PLAN_FILE checkbox to '- [~] ...' — no exact matching line found."
+      audit_log "$TASK_TEXT_RAW" "$GATE" "$TASK_CODE_MODEL" "$TASK_REVIEW_MODEL" "blocked" "$SHA" "checkbox transition to awaiting-approval failed"
+      exit 1
+    fi
 
     cat > "$AWAITING_FILE" <<EOF
 # AWAITING_APPROVAL.md (written by run-plan.sh — expected pause, not a failure)
@@ -423,9 +503,11 @@ sees it." \
 $TASK_TEXT
 
 ## Gate
-$GATE — human sign-off is mandatory for this gate type, regardless of how
-clean the self-check or L2 review looked. See run-plan.sh's own log output
-above for the L2 verdict on this commit.
+$GATE
+
+Human sign-off is mandatory for this gate type, regardless of how clean the
+self-check or L2 review looked. See run-plan.sh's own log output above for
+the L2 verdict on this commit.
 
 ## PLAN.md line
 $TASK_TEXT_RAW
@@ -454,4 +536,8 @@ if ! run_l3_review; then
   exit 1
 fi
 
-log "Done. L4 (human review of 'git diff main...HEAD') is next — that step is not automated."
+if [ -f "$L3_SKIPPED_FILE" ]; then
+  log "Done, but L3 was skipped due to diff size — see $L3_SKIPPED_FILE before treating this as finished."
+else
+  log "Done. L4 (human review of 'git diff main...HEAD') is next — that step is not automated."
+fi

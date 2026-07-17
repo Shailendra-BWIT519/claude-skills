@@ -1,13 +1,13 @@
 ---
-name: ai-workflow-setup-react
-description: Scaffold the solo-dev AI pipeline for a React or Next.js frontend project specifically — pre-filled gates/code-check.sh (typecheck/lint/test/format), .claudeignore, and a11y/visual-regression toggle guidance. Thin wrapper around the setup-ai-workflow skill's shared engine (run-plan.sh, classify-models.sh, hooks, commands, gates) — same pipeline, React-specific defaults so onboarding skips code-language detection. Use when the user wants this workflow set up in a React or Next.js project.
+name: bwit-ai-workflow-setup-react
+description: Scaffold the solo-dev AI pipeline for a React or Next.js frontend project specifically — pre-filled gates/code-check.sh (typecheck/lint/test/format), .claudeignore, and a11y/visual-regression toggle guidance. Thin wrapper around the bwit-setup-ai-workflow skill's shared engine (run-plan.sh, classify-models.sh, hooks, commands, gates) — same pipeline, React-specific defaults so onboarding skips code-language detection. Use when the user wants this workflow set up in a React or Next.js project.
 ---
 
 # AI Workflow Setup — React / Next.js
 
 Thin wrapper. The actual engine (`run-plan.sh`, `classify-models.sh`, hooks,
 slash commands, `gates/` skeletons) lives in exactly one place:
-`~/.claude/skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
+`~/.claude/skills/bwit-setup-ai-workflow/`. Read that skill's `SKILL.md` and
 follow its Steps 1-8 exactly, with these React/Next.js-specific overrides
 to Step 5's **code domain** detection only — the shared skill's design and
 AI/eval domain detection in Step 5 still applies independently and
@@ -40,7 +40,7 @@ unmodified (a React project can also have a `[design]`/`[eval]` surface):
 
 Everything else — copy list, `.claude/settings.json` merge, `PLAN.md`
 seeding, the `.gitignore` tracked-vs-ignored question, final report — follow
-`setup-ai-workflow`'s `SKILL.md` unchanged. In particular: don't skip its
+`bwit-setup-ai-workflow`'s `SKILL.md` unchanged. In particular: don't skip its
 design/AI-eval domain detection just because this is a code-focused
 wrapper — a React project with a `/design` directory or a `tokens.json`
 still gets `gates/design-checklist.md` scaffolded exactly as the shared
