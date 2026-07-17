@@ -7,7 +7,7 @@ description: Scaffold the solo-dev AI pipeline for a NestJS backend project spec
 
 Thin wrapper. The actual engine (`run-plan.sh`, `classify-models.sh`, hooks,
 slash commands, `check.sh` skeleton) lives in exactly one place:
-`~/.claude/skills/ai-workflow-skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
+`~/.claude/skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
 follow its Steps 1-8 exactly, with these NestJS-specific overrides to Step 5:
 
 - **Skip language detection** — this is NestJS, confirmed by the user

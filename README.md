@@ -5,13 +5,14 @@ Code reads skills from this exact path per user account, so cloning this
 repo to `~/.claude/skills/` on a new machine makes every skill here
 available in every project, with no per-project setup.
 
-All the AI-workflow skills live grouped under `ai-workflow-skills/` — not
-to be confused with `ai-workflow-skills/setup-ai-workflow/`, the shared
-engine skill nested inside it (the near-identical names are intentional:
-one is the grouping folder, the other is the actual skill you invoke):
+**All skills must be immediate subfolders of `~/.claude/skills/` — Claude
+Code does not discover skills nested any deeper than that.** This was tried
+once (grouped under an `ai-workflow-skills/` folder) and confirmed broken —
+`/ai-workflow-setup-react` returned "No matching commands" until it was
+reverted back to flat. Do not re-nest these.
 
 ```
-ai-workflow-skills/
+~/.claude/skills/
 ├── setup-ai-workflow/          ← shared engine, invoke: /setup-ai-workflow
 ├── ai-workflow-setup-react/    ← invoke: /ai-workflow-setup-react
 ├── ai-workflow-setup-node/     ← invoke: /ai-workflow-setup-node
@@ -20,7 +21,7 @@ ai-workflow-skills/
 └── ai-workflow-setup-dotnet/   ← invoke: /ai-workflow-setup-dotnet
 ```
 
-Each subfolder is one skill — a `SKILL.md` plus any template files it needs.
+Each folder is one skill — a `SKILL.md` plus any template files it needs.
 
 ## Skills
 
