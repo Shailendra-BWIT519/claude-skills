@@ -70,19 +70,36 @@ this pipeline calls to verify work, instead of running `npx`/`npm run`/
    - Write `.claudeignore` with ecosystem-appropriate patterns — e.g.
      `node_modules/`, `.next/` for Node; `__pycache__/`, `venv/`, `*.pyc`,
      `.venv/` for Python; `vendor/` for Go — plus lockfiles and build output.
-   - **Customize `claude-workflow/check.sh`**: replace its four
+   - **Customize `claude-workflow/check.sh`**: replace its four core
      `REPLACE_ME_*` command strings with this project's real
      typecheck/lint/test/format commands (see the comment at the top of the
      file for per-ecosystem examples). This becomes the single L1 gate —
      `run-plan.sh`'s prompts already call `bash claude-workflow/check.sh`
      generically, so nothing else needs editing once these four lines are
      filled in. Do not leave any `REPLACE_ME_*` placeholder in place.
+   - **Frontend/UI project?** Two more optional `REPLACE_ME_*` lines exist
+     for `RUN_A11Y`/`RUN_VISUAL_REGRESSION` — leave both `false` in
+     `check.config` (the default) unless the user explicitly asks for
+     accessibility or visual-regression checking. If they do, the actual
+     tooling (`eslint-plugin-jsx-a11y`, Playwright + a committed baseline,
+     etc.) has to be installed and the exact command verified by actually
+     running it once — do not wire up a guessed command and trust it.
+     Backend-only project (Python/NestJS API, etc.)? Delete both
+     `run_check` lines from `check.sh` entirely rather than leaving them
+     permanently off.
    - Actually RUN `bash claude-workflow/check.sh` and report what passes and
      what fails — do not assume any command works just because a script
      exists. This project's own onboarding found a `npm test` that was
      declared but silently broken (missing deps entirely absent from
      `package.json`), and separately a broken `lint` (missing eslint
      plugin) that only `check.sh`'s actual run surfaced.
+   - **If the project has a meaningful frontend/UI surface**, add a `##
+     Scope boundary` note to the generated `CLAUDE.md`: pure design/UX work
+     (Figma exports, mockups, visual direction — non-code deliverables) is a
+     poor fit for this pipeline, since `check.sh` and L2/L3 diff-review only
+     work because code is machine-checkable — a design artifact has no
+     equivalent gate. Implementing a design INTO code is unaffected. Skip
+     this note for backend-only projects where it wouldn't apply.
 
 6. **Seed 2-3 boring smoke-test tasks** into `claude-workflow/PLAN.md` —
    mechanical, low-risk fixes discovered during onboarding (stale config,
