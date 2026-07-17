@@ -43,6 +43,16 @@ FEATURE_REVIEW_MODEL="claude-sonnet-5"    # L3: feature-level review
 
 REVIEW_MODEL="${REVIEW_MODEL_OVERRIDE:-$REVIEW_MODEL}"
 
+# CUSTOMIZE: the branch this project actually merges into. NEVER guess or
+# auto-detect this during onboarding (e.g. by assuming "main", or reading
+# GitHub's default-branch setting) — ask the developer directly, show them
+# `git branch --list`, and use their exact answer. A wrong guess here
+# silently reviews against the wrong base with no error (this happened for
+# real: a project whose GitHub default branch was "main" but whose actual
+# merge target was "dev" produced a 5MB, 2222-commit diff by comparing
+# against the wrong branch before this was made explicit).
+BASE_BRANCH="REPLACE_ME_BASE_BRANCH"
+
 # --- Timeouts (seconds) ---
 # Every `claude -p` call runs headless with no one to answer a permission
 # prompt it can't resolve from the pre-approved allowlist. Without a bound,
@@ -51,9 +61,9 @@ REVIEW_MODEL="${REVIEW_MODEL_OVERRIDE:-$REVIEW_MODEL}"
 TASK_TIMEOUT=1200   # task implementation + L2-fix sessions: 20 min
 REVIEW_TIMEOUT=600  # L2/L3 review sessions: 10 min
 
-# L3 reviews the WHOLE branch diff (main...HEAD) in one prompt. On a branch
-# that's diverged heavily from main (long-lived branch, stale main, or just
-# a lot of unrelated prior history) this can be megabytes — the CLI itself
+# L3 reviews the WHOLE branch diff (BASE_BRANCH...HEAD) in one prompt. On a
+# branch that's diverged heavily from BASE_BRANCH (long-lived branch, stale
+# base, or just a lot of unrelated prior history) this can be megabytes — the CLI itself
 # rejects an oversized prompt ("Prompt is too long"), which previously
 # surfaced as a bare crash with no indication why. 500KB is well past what
 # a single review pass can meaningfully digest anyway, so past this size
@@ -207,8 +217,22 @@ audit_log() {
 }
 
 # --- Safety checks ---
+# BASE_BRANCH must be explicitly set by a human during onboarding — there
+# is deliberately NO fallback to "main" here. A silent default is exactly
+# how a wrong base branch goes unnoticed: it would compare against the
+# wrong history for both this safety check and L3's review, produce
+# plausible-looking (but meaningless) output, and nobody would know to
+# question it. Refusing to run beats guessing wrong.
+if [ -z "$BASE_BRANCH" ] || [ "$BASE_BRANCH" = "REPLACE_ME_BASE_BRANCH" ]; then
+  log "ERROR: BASE_BRANCH is not set (still a placeholder or empty)."
+  log "  This must be the exact branch this project merges into — it is"
+  log "  NOT assumed to be 'main'. Open claude-workflow/run-plan.sh and set"
+  log "  BASE_BRANCH=\"<your-actual-merge-target>\" near the top, then re-run."
+  exit 1
+fi
+
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+if [ "$BRANCH" = "$BASE_BRANCH" ] || [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
   log "ERROR: on '$BRANCH'. Create/checkout a feature branch first."
   exit 1
 fi
@@ -318,32 +342,33 @@ $diff"
 
 run_l3_review() {
   local diff prompt diff_bytes
-  diff=$(git diff main...HEAD 2>/dev/null)
+  diff=$(git diff "$BASE_BRANCH"...HEAD 2>/dev/null)
   diff_bytes=$(printf '%s' "$diff" | wc -c)
 
   if [ "$diff_bytes" -gt "$L3_MAX_DIFF_BYTES" ]; then
     local file_count
-    file_count=$(git diff main...HEAD --stat 2>/dev/null | tail -1)
+    file_count=$(git diff "$BASE_BRANCH"...HEAD --stat 2>/dev/null | tail -1)
     cat > "$L3_SKIPPED_FILE" <<EOF
 # L3_SKIPPED.md (written by run-plan.sh — not a failure, a graceful skip)
 
-L3's whole-branch review (\`git diff main...HEAD\`) was skipped: the diff is
-${diff_bytes} bytes, over the ${L3_MAX_DIFF_BYTES}-byte limit for a single
-review pass to meaningfully digest, and past what the CLI will accept as
-one prompt anyway.
+L3's whole-branch review (\`git diff $BASE_BRANCH...HEAD\`) was skipped: the
+diff is ${diff_bytes} bytes, over the ${L3_MAX_DIFF_BYTES}-byte limit for a
+single review pass to meaningfully digest, and past what the CLI will
+accept as one prompt anyway.
 
 $file_count
 
-This usually means this branch has diverged heavily from main (a long-lived
-branch, a stale main, or unrelated prior history) — not that this run's
-tasks are unusually large. Each individual task's diff was already reviewed
-by L2 (see claude-workflow/AUDIT_LOG.jsonl for the per-task outcomes).
+This usually means this branch has diverged heavily from $BASE_BRANCH (a
+long-lived branch, a stale $BASE_BRANCH, or unrelated prior history) — not
+that this run's tasks are unusually large. Each individual task's diff was
+already reviewed by L2 (see claude-workflow/AUDIT_LOG.jsonl for the
+per-task outcomes).
 
 ## What to do
-Review \`git diff main...HEAD\` yourself in chunks (e.g. per-file, or
-\`git log main..HEAD --oneline\` to scope down to the commits that actually
-matter), or rebase/merge main into this branch first to shrink the diff
-before re-running L3 manually.
+Review \`git diff $BASE_BRANCH...HEAD\` yourself in chunks (e.g. per-file,
+or \`git log $BASE_BRANCH..HEAD --oneline\` to scope down to the commits
+that actually matter), or rebase/merge $BASE_BRANCH into this branch first
+to shrink the diff before re-running L3 manually.
 
 Delete this file once you've reviewed (or consciously decided to skip) L4.
 EOF
@@ -539,5 +564,5 @@ fi
 if [ -f "$L3_SKIPPED_FILE" ]; then
   log "Done, but L3 was skipped due to diff size — see $L3_SKIPPED_FILE before treating this as finished."
 else
-  log "Done. L4 (human review of 'git diff main...HEAD') is next — that step is not automated."
+  log "Done. L4 (human review of 'git diff $BASE_BRANCH...HEAD') is next — that step is not automated."
 fi

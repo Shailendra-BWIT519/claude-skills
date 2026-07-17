@@ -107,6 +107,20 @@ file formats, are in `templates/SETUP-PLAN.md` §5.5.
    overwrite the file wholesale. If it doesn't exist, create it from the
    snippet as-is.
 
+   **Ask the developer which branch they merge into — never guess.**
+   `run-plan.sh`'s `BASE_BRANCH` (used for the base-branch safety check and
+   L3's whole-branch review diff) ships as the placeholder
+   `REPLACE_ME_BASE_BRANCH`. Run `git branch --list` (and `git remote show
+   origin | grep "HEAD branch"` if useful context), show the developer the
+   actual branch list, and ask them directly which one they merge feature
+   work into. Do NOT assume "main" or auto-detect the GitHub default branch
+   — a project's real merge target can differ from its default branch (this
+   happened for real: a project whose GitHub default was "main" actually
+   merged into "dev", and a hardcoded/guessed "main" produced a diff
+   comparing against 7 months and 2000+ unrelated commits of divergence).
+   Replace `REPLACE_ME_BASE_BRANCH` in `claude-workflow/run-plan.sh` with
+   their exact answer once copied.
+
 4. **`.claudeignore`.** Create one at the project root once step 5 has
    identified the language/ecosystem — see step 5's ignore-pattern guidance.
    Do not copy a template for this; its content is project-specific.
