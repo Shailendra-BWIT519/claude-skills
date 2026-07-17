@@ -26,6 +26,24 @@ FEATURE_REVIEW_MODEL="claude-sonnet-5"    # L3: feature-level review
 
 REVIEW_MODEL="${REVIEW_MODEL_OVERRIDE:-$REVIEW_MODEL}"
 
+# --- Timeouts (seconds) ---
+# Every `claude -p` call runs headless with no one to answer a permission
+# prompt it can't resolve from the pre-approved allowlist. Without a bound,
+# a stuck call (permission wait, network stall, anything) hangs forever with
+# near-zero CPU usage and no error — this happened for real during testing.
+TASK_TIMEOUT=1200   # task implementation + L2-fix sessions: 20 min
+REVIEW_TIMEOUT=600  # L2/L3 review sessions: 10 min
+
+# Runs `claude -p` under a timeout; returns 124 on timeout (GNU coreutils
+# `timeout` convention), otherwise claude's own exit code.
+run_claude() {
+  local timeout_s="$1"
+  shift
+  # -k 10: if SIGTERM doesn't kill a truly stuck process (e.g. blocked in a
+  # syscall), send SIGKILL 10s later so the script always regains control.
+  timeout -k 10 "$timeout_s" claude "$@"
+}
+
 # This script lives in claude-workflow/, but must operate from the repo root
 # (git commands, npm test, file paths in prompts all assume root).
 PROJECT_DIR="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
@@ -78,7 +96,7 @@ fi
 
 run_task() {
   local task="$1" model="$2"
-  claude -p "Read $PLAN_FILE and CLAUDE.md first.
+  run_claude "$TASK_TIMEOUT" -p "Read $PLAN_FILE and CLAUDE.md first.
 
 Complete ONLY this one task, strictly in scope, with NO unrelated refactoring:
 
@@ -108,7 +126,7 @@ run_l2_review() {
     log "L2: no diff to review (no commit made), skipping."
     return 0
   fi
-  claude -p "Review ONLY this diff. Check for bugs, security issues, missing
+  run_claude "$REVIEW_TIMEOUT" -p "Review ONLY this diff. Check for bugs, security issues, missing
 edge cases, and scope creep. If you find issues, write them to $REVIEW_FILE
 with file:line references. If it's clean, respond with just: CLEAN
 
@@ -121,7 +139,7 @@ $diff" \
 run_l3_review() {
   local diff
   diff=$(git diff main...HEAD 2>/dev/null)
-  claude -p "You did NOT write this code. You are a skeptical senior reviewer.
+  run_claude "$REVIEW_TIMEOUT" -p "You did NOT write this code. You are a skeptical senior reviewer.
 Assume it has at least 2 problems — find them. Focus on: failure paths,
 breaking inputs, design coherence across tasks, duplicated logic, and
 integration gaps.
@@ -194,12 +212,17 @@ EOF
   fi
 
   log "L2 review ($TASK_REVIEW_MODEL)..."
-  run_l2_review "$TASK_REVIEW_MODEL"
+  if ! run_l2_review "$TASK_REVIEW_MODEL"; then
+    log "STOP: L2 review did not complete (timed out or failed) — a review"
+    log "  that didn't run is not the same as a clean review. Not safe to"
+    log "  proceed past this task without one."
+    exit 1
+  fi
 
   if [ -f "$REVIEW_FILE" ]; then
     log "L2 found issues — fixing before continuing..."
     BEFORE_FIX_HEAD=$(git rev-parse HEAD)
-    claude -p "Read $REVIEW_FILE and fix the issues it raises. Add a
+    run_claude "$TASK_TIMEOUT" -p "Read $REVIEW_FILE and fix the issues it raises. Add a
 follow-up git commit, then delete $REVIEW_FILE. If a fix requires editing a
 permission-gated file (e.g. .claude/settings.json) and you cannot get that
 approval in this headless session, do NOT delete $REVIEW_FILE — leave it in
@@ -223,6 +246,11 @@ sees it." \
 done
 
 log "All PLAN.md tasks complete. Running L3 feature review ($FEATURE_REVIEW_MODEL)..."
-run_l3_review
+if ! run_l3_review; then
+  log "ERROR: L3 review did not complete (timed out or failed) — no"
+  log "  feature-level review was produced. Do not treat this run as"
+  log "  finished; re-run the L3 step manually, or investigate."
+  exit 1
+fi
 
 log "Done. L4 (human review of 'git diff main...HEAD') is next — that step is not automated."
