@@ -7,7 +7,7 @@ description: Scaffold the solo-dev AI pipeline for a React or Next.js frontend p
 
 Thin wrapper. The actual engine (`run-plan.sh`, `classify-models.sh`, hooks,
 slash commands, `gates/` skeletons) lives in exactly one place:
-`~/.claude/skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
+`~/.claude/skills/ai-workflow-skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
 follow its Steps 1-8 exactly, with these React/Next.js-specific overrides
 to Step 5's **code domain** detection only — the shared skill's design and
 AI/eval domain detection in Step 5 still applies independently and

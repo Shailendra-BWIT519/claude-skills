@@ -7,7 +7,7 @@ description: Scaffold the solo-dev AI pipeline for a generic Node.js backend pro
 
 Thin wrapper. The actual engine (`run-plan.sh`, `classify-models.sh`, hooks,
 slash commands, `gates/` skeletons) lives in exactly one place:
-`~/.claude/skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
+`~/.claude/skills/ai-workflow-skills/setup-ai-workflow/`. Read that skill's `SKILL.md` and
 follow its Steps 1-8 exactly, with these Node-specific overrides to Step 5's
 **code domain** detection only — the shared skill's design and AI/eval
 domain detection in Step 5 still applies independently and unmodified (a
