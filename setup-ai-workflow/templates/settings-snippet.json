@@ -1,0 +1,30 @@
+{
+  "model": "claude-sonnet-5",
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-compact-handoff.sh\"",
+            "shell": "bash",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-context.sh\"",
+            "shell": "bash",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
