@@ -52,9 +52,18 @@ COMMITS=$(git log -5 --oneline 2>/dev/null)
   echo ""
   echo "## claude-workflow/PLAN.md task status"
   if [ -f "$PROJECT_DIR/claude-workflow/PLAN.md" ]; then
-    grep -E '^[[:space:]]*-[[:space:]]*\[[ xX]\]' "$PROJECT_DIR/claude-workflow/PLAN.md" || echo "(no tasks found)"
+    # [ xX~] — must include ~ (awaiting-approval), or those tasks silently
+    # vanish from this dump the moment run-plan.sh pauses on one.
+    grep -E '^[[:space:]]*-[[:space:]]*\[[ xX~]\]' "$PROJECT_DIR/claude-workflow/PLAN.md" || echo "(no tasks found)"
   else
     echo "(no claude-workflow/PLAN.md)"
+  fi
+  echo ""
+  echo "## Human-gated pause"
+  if [ -f "$PROJECT_DIR/claude-workflow/AWAITING_APPROVAL.md" ]; then
+    echo "AWAITING_APPROVAL.md exists — run \`bash claude-workflow/approve.sh\` (or reject per its instructions) before resuming run-plan.sh."
+  else
+    echo "(none)"
   fi
 } > "$HANDOFF"
 

@@ -34,11 +34,23 @@ fi
 
 TASK_COUNT=0
 while IFS= read -r line; do
-  TASK_TEXT="${line#"- [ ] "}"
+  # Quoted pattern: unquoted "[ ]" would be parsed as a glob bracket class
+  # (matching one space) rather than literal brackets, silently failing to
+  # strip the prefix at all — quoting forces a literal match.
+  TASK_TEXT="${line#'- [ ] '}"
   [ -z "$TASK_TEXT" ] && continue
+  # Skip [blocked] tasks — run-plan.sh won't execute them either, so there's
+  # nothing to classify a model for yet.
+  echo "$line" | grep -qE '^- \[ \] (\[[a-z-]+\] )?\[blocked\]' && continue
   TASK_COUNT=$((TASK_COUNT + 1))
 
-  log "Classifying task $TASK_COUNT: ${TASK_TEXT:0:60}..."
+  # Strip the leading [gate-type] tag for the classifier prompt only — the
+  # "## Task:" header below keeps the raw tagged text, since that's the
+  # exact-match lookup key run-plan.sh's get_task_model() uses against
+  # PLAN.md lines.
+  TASK_TEXT_CLEAN=$(echo "$TASK_TEXT" | sed -E 's/^\[[a-z-]+\] //')
+
+  log "Classifying task $TASK_COUNT: ${TASK_TEXT_CLEAN:0:60}..."
 
   RESPONSE=$(claude -p "You are choosing which Claude model should CODE this task and
 which should REVIEW its diff afterward. Available models, cheapest to most
@@ -56,7 +68,7 @@ The review model should usually be the same as or cheaper than the code
 model, since it only reads a diff — escalate the review model only if the
 diff is likely to touch security/payments/auth.
 
-Task: $TASK_TEXT
+Task: $TASK_TEXT_CLEAN
 
 Respond with ONLY this exact format, nothing else:
 code_model: <model id>

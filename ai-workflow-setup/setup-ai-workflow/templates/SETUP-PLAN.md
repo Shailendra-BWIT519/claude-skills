@@ -48,19 +48,32 @@ project/
 
 ├── REQUIREMENTS.md        ← SIRF HUMAN likhta hai (source of truth)
 
-├── PLAN.md                ← Claude banata hai (/sync se), append-only
+├── PLAN.md                ← Claude banata hai (/sync se), append-only,
+│                              har task [gate-type]-tagged (§5.5)
 
 ├── CLAUDE.md              ← Claude banata hai, human monthly prune (60-100 lines)
 
 ├── QUESTIONS.md           ← Claude: ambiguous requirements yahan (guess nahi)
 
-├── BLOCKED.md             ← Claude: atka task yahan (loop stopper)
+├── BLOCKED.md             ← Claude: atka task yahan (loop stopper — failure)
+
+├── AWAITING_APPROVAL.md   ← run-plan.sh: human-gated task yahan (loop
+│                              pauser — NOT a failure, see §5.5)
+
+├── AUDIT_LOG.jsonl        ← run-plan.sh (only): append-only, every task's
+│                              outcome — committed/blocked/awaiting_approval/approved
 
 ├── REVIEW.md              ← Reviewer: issues yahan (loop stopper)
 
 ├── .claudeignore          ← node_modules, dist, build, locks, generated files
 
 ├── run-plan.sh            ← execution engine (headless loop)
+
+├── approve.sh             ← deterministic sign-off for a paused human-gated task
+
+├── gates/                 ← per-gate-type verification (§5.5): code-check.sh,
+│                              eval-check.sh + eval.config, design-checklist.md,
+│                              structural-checklist.md, eval-judgment-checklist.md
 
 └── .claude/
 
@@ -70,7 +83,7 @@ project/
 
     │   ├── handoff.md     ← manual escape hatch
 
-    │   └── sync.md        ← requirements → plan generator
+    │   └── sync.md        ← requirements → plan generator (also tags gates)
 
     └── hooks/
 
@@ -282,6 +295,55 @@ Handoff file sirf emergency (hook khud sambhalta hai). Vector DB nahi chahiye.
 
 ---
 
+## 5.5 Gate types & human-gated pause
+
+Not every task has a test suite. Design work, prompt/eval judgment calls,
+and architecture/requirements work don't have a deterministic pass/fail —
+forcing them through the same "tests pass → auto-commit → continue" path
+as code would mean silently trusting a self-report with no real check
+behind it. So every PLAN.md task line carries a gate tag, and run-plan.sh
+dispatches to the matching mechanism in `gates/`:
+
+```
+
+- [ ] [code]           → gates/code-check.sh (typecheck/lint/test/format)
+
+- [ ] [eval]            → gates/eval-check.sh, IF gates/eval.config has a
+                          real metric threshold for it — else falls back
+                          to the human-gated path below (never guesses a
+                          threshold, never silently auto-passes)
+
+- [ ] [design]          → gates/design-checklist.md (self-check, then
+                          mandatory human sign-off)
+
+- [ ] [eval-judgment]   → gates/eval-judgment-checklist.md (same)
+
+- [ ] [structural]      → gates/structural-checklist.md (same) — also the
+                          default for any untagged/unrecognized task,
+                          i.e. the strictest gate wins when in doubt
+
+```
+
+`[code]` and configured `[eval]` tasks behave exactly like the original
+loop: check passes → commit → continue automatically.
+
+Every other gate type still COMMITS its work (a fresh `claude -p` session
+has no memory beyond what's on disk/in git, so committing is the only way
+the work survives to be reviewed) but then the loop PAUSES:
+`AWAITING_APPROVAL.md` is written (task, gate, commit SHA, resume/reject
+instructions) and run-plan.sh exits 0 — a deliberate, expected pause, not
+a failure like BLOCKED.md's exit 1. Resume with `bash approve.sh` (flips
+the PLAN.md checkbox from `[~]` to `[x]`, deletes the pause file, logs the
+approval) then re-run run-plan.sh. Rejecting is manual: revert/edit the
+commit, reset the checkbox to `[ ]`, delete the pause file.
+
+Every outcome — committed, blocked, awaiting_approval, approved — gets one
+line appended to `AUDIT_LOG.jsonl`, written ONLY by run-plan.sh/approve.sh
+themselves (never by a task or review session), so the trail can't be
+silently skipped or gamed by a session that wants to look done.
+
+---
+
 ## 6. Review pipeline (4 layers)
 
 | Layer | Kaun | Kab | Cost |
@@ -301,6 +363,15 @@ L4 kabhi automate nahi hoga — "kya ye wahi hai jo mujhe chahiye tha" sirf
 human bata sakta hai. Agar L3 consistently koi cheez miss kare → pehle
 
 poochho kya wo lint rule/test ban sakti hai (L1) — deterministic hamesha jeet-ta hai.
+
+**Important:** the per-task human-gated pause (§5.5, `AWAITING_APPROVAL.md`)
+is NOT L4. It's a per-task sign-off on individual `[design]`/`[structural]`/
+`[eval-judgment]`/unconfigured-`[eval]` commits as they happen. L4 — the
+full-feature `git diff main...HEAD` review — still happens unconditionally
+at the end, regardless of how many individual tasks were already
+human-approved along the way. Conflating the two is an easy mistake:
+approving every task's pause is not the same as reviewing the feature as a
+whole.
 
 ---
 
@@ -417,6 +488,21 @@ Monthly: CLAUDE.md prune (jo Claude bina bole sahi karta hai, wo line
 - ❌ L4 (human review) automation — judgment automate nahi hota
 
 - ❌ CLAUDE.md me task lists, model policy, ya code se infer hone wali info
+
+- ❌ RBAC / multi-user approval roles — solo maintainer approves everything,
+  `approve.sh` doesn't need to know who "should" be allowed to run it
+
+- ❌ External audit database — a git-tracked `AUDIT_LOG.jsonl` file is the
+  audit log; `tail`/`grep`/`jq` on it is enough tooling
+
+- ❌ Auto-approval inferred from checklist completeness — sign-off is
+  never inferred from how clean a self-check looks, only explicit
+
+- ❌ LLM-driven approval flow — `approve.sh` is deterministic bash, not a
+  `claude -p` session (flipping a checkbox needs zero judgment)
+
+- ❌ Dashboard/TUI for reviewing pauses or the audit log — markdown +
+  JSONL + shell one-liners are enough for a solo maintainer
 
 ---
 

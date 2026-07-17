@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Single L1 gate: runs typecheck + lint + test (+ optional format check) in
-# one call. Output is captured and only printed when a check FAILS — a
-# passing run costs a handful of tokens no matter how chatty the underlying
-# tool is. Toggle individual checks in claude-workflow/check.config; never
-# edit this script just to turn a check on/off.
+# Deterministic L1 gate for [code]-tagged (and configured [eval]) tasks: runs
+# typecheck + lint + test (+ optional format check) in one call. Output is
+# captured and only printed when a check FAILS — a passing run costs a
+# handful of tokens no matter how chatty the underlying tool is. Toggle
+# individual checks in claude-workflow/gates/code-check.config; never edit
+# this script just to turn a check on/off.
 #
 # CUSTOMIZE: replace the REPLACE_ME_* command strings near the bottom with
 # this project's actual commands, based on the detected ecosystem, e.g.:
@@ -18,9 +19,9 @@ set -uo pipefail
 PROJECT_DIR="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 cd "$PROJECT_DIR"
 
-CONFIG_FILE="claude-workflow/check.config"
+CONFIG_FILE="claude-workflow/gates/code-check.config"
 
-# Defaults if check.config is missing or doesn't set a var
+# Defaults if code-check.config is missing or doesn't set a var
 RUN_TYPECHECK=true
 RUN_LINT=true
 RUN_TEST=true
@@ -58,7 +59,7 @@ run_check() {
 # projects. Do NOT wire up a command here from a guess — actually install the
 # tooling (e.g. eslint-plugin-jsx-a11y, or Playwright + a committed baseline)
 # and run the exact command once yourself to confirm it works before trusting
-# it in the loop. Leave both toggles false in check.config until then.
+# it in the loop. Leave both toggles false in code-check.config until then.
 [ "$RUN_A11Y" = true ] && run_check "a11y" "REPLACE_ME_A11Y_COMMAND"
 [ "$RUN_VISUAL_REGRESSION" = true ] && run_check "visual-regression" "REPLACE_ME_VISUAL_REGRESSION_COMMAND"
 

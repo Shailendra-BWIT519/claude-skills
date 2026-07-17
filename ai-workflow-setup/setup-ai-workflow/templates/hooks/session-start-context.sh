@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Loads durable state back into context at the start of every session:
 # branch/diff status, pending claude-workflow/PLAN.md tasks, any pending
-# HANDOFF.md, claude-workflow/BLOCKED.md.
+# HANDOFF.md, claude-workflow/BLOCKED.md, an awaiting-approval pause, and a
+# tail of the audit log.
 set -uo pipefail
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
@@ -29,6 +30,30 @@ fi
 
 if [ -f "$PROJECT_DIR/claude-workflow/BLOCKED.md" ]; then
   CTX+=$'\n\n'"WARNING: claude-workflow/BLOCKED.md exists — resolve before running the automated loop."$'\n'"$(cat "$PROJECT_DIR/claude-workflow/BLOCKED.md")"
+fi
+
+if [ -f "$PROJECT_DIR/claude-workflow/AWAITING_APPROVAL.md" ]; then
+  CTX+=$'\n\n'"PAUSED: claude-workflow/AWAITING_APPROVAL.md exists — a human-gated task needs sign-off (bash claude-workflow/approve.sh) before the loop can continue."$'\n'"$(cat "$PROJECT_DIR/claude-workflow/AWAITING_APPROVAL.md")"
+fi
+
+AUDIT_LOG="$PROJECT_DIR/claude-workflow/AUDIT_LOG.jsonl"
+if [ -f "$AUDIT_LOG" ]; then
+  AUDIT_TAIL=$(tail -n 5 "$AUDIT_LOG" | node -e '
+    let d="";
+    process.stdin.on("data",c=>d+=c);
+    process.stdin.on("end",()=>{
+      const lines = d.split("\n").filter(Boolean).map(l => {
+        try {
+          const e = JSON.parse(l);
+          return `${e.ts}  ${e.outcome.padEnd(17)} [${e.gate}]  ${e.task}`;
+        } catch(err) { return null; }
+      }).filter(Boolean);
+      console.log(lines.join("\n"));
+    });
+  ')
+  if [ -n "$AUDIT_TAIL" ]; then
+    CTX+=$'\n\n'"Recent claude-workflow/AUDIT_LOG.jsonl entries:"$'\n'"$AUDIT_TAIL"
+  fi
 fi
 
 node -e '
