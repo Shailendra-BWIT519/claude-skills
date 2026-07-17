@@ -34,7 +34,7 @@ fi
 
 TASK_COUNT=0
 while IFS= read -r line; do
-  TASK_TEXT="${line#- [ ] }"
+  TASK_TEXT="${line#"- [ ] "}"
   [ -z "$TASK_TEXT" ] && continue
   TASK_COUNT=$((TASK_COUNT + 1))
 

@@ -157,7 +157,7 @@ fi
 
 while grep -qE '^- \[ \]' "$PLAN_FILE"; do
   TASK_LINE=$(grep -E '^- \[ \]' "$PLAN_FILE" | head -1)
-  TASK_TEXT="${TASK_LINE#- [ ] }"
+  TASK_TEXT="${TASK_LINE#"- [ ] "}"
 
   TASK_CODE_MODEL=$(get_task_model "$TASK_TEXT" "code_model" "$CODE_MODEL")
   TASK_REVIEW_MODEL=$(get_task_model "$TASK_TEXT" "review_model" "$REVIEW_MODEL")
